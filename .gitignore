@@ -1,0 +1,6 @@
+src/
+DolphinQt.app/
+dolphin-tool
+version
+out/
+.DS_Store

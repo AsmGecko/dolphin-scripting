@@ -1,0 +1,36 @@
+# On a tag <Felk's tag>-mac<n> (scripting-preview4-mac1): builds Felk's Dolphin with scripting for macOS on Apple
+# silicon and Intel, and puts each build with the exact source it was built from on the release.
+name: release
+on:
+  push:
+    tags: ["*-mac*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install cmake ninja pkg-config qt libusb
+      - name: build
+        run: |
+          tag="${GITHUB_REF_NAME%-mac*}"
+          ./build-macos.sh "$tag" out
+          # The source as it was built: Felk's commit and every submodule's, and the tree itself
+          { echo "Felk/dolphin $tag $(git -C out/src rev-parse HEAD)"; git -C out/src submodule status --recursive; \
+            brew list --versions cmake ninja pkg-config qt libusb; } > out/sources.txt
+          tar -czf "dolphin-$tag-source.tar.gz" --exclude=src/build -C out src sources.txt
+          (cd out && zip -qry "../dolphin-$tag-macos-${{ matrix.arch }}.zip" DolphinQt.app dolphin-tool sources.txt)
+          shasum -a 256 dolphin-*.zip dolphin-*-source.tar.gz
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dolphin-*-macos-*.zip
+            dolphin-*-source.tar.gz
