@@ -36,5 +36,8 @@ cmake -S "$src" -B "$src/build" -G Ninja -Wno-dev -Wno-deprecated -DCMAKE_BUILD_
 ninja -C "$src/build" dolphin-emu dolphin-tool > /dev/null
 rm -rf "$out/DolphinQt.app" "$out/dolphin-tool"
 cp -R "$src/build/Binaries/DolphinQt.app" "$src/build/Binaries/dolphin-tool" "$out/"
+# The tests run beside other work: a background app never takes the focus
+plutil -replace LSBackgroundOnly -bool true "$out/DolphinQt.app/Contents/Info.plist"
+codesign --force --deep -s - "$out/DolphinQt.app" 2> /dev/null
 echo "$tag" > "$out/version"
 echo "ok: $out (Dolphin $tag)"
