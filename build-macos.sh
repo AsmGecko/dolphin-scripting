@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds Felk's Dolphin with Python scripting (github.com/Felk/dolphin) for macOS, with DolphinTool: Felk only publishes
-# it for Windows. Nothing of Dolphin is changed, only how it's built.
+# it for Windows, with the patches in patches/.
 # Needs: brew install cmake ninja pkg-config qt libusb. Takes half an hour.
 # Usage: build-macos.sh <tag of Felk/dolphin> <out folder>
 set -euo pipefail
@@ -10,6 +10,8 @@ if [ $# -ne 2 ]; then
   exit 1
 fi
 tag="$1"
+revision=2       # of these patches and this script: the n of a release tag <tag>-mac<n>
+here="$(cd "$(dirname "$0")" && pwd)"
 out="$(mkdir -p "$2" && cd "$2" && pwd)"
 src="$out/src"
 
@@ -20,6 +22,9 @@ if [ ! -d "$src" ]; then
     git -C "$src" config "submodule.Externals/$windows_only.update" none
   done
   git -C "$src" submodule update -q --init --recursive
+  for patch in "$here"/patches/*.patch; do
+    git -C "$src" apply "$patch"
+  done
 fi
 # Qt 6.10 and later keep their private headers apart, the fmt of Dolphin doesn't build as consteval with the clang of
 # Xcode 26, its libusb crashes on start, and MoltenVK wants macOS 12 or later: Metal does without Vulkan
@@ -39,5 +44,5 @@ cp -R "$src/build/Binaries/DolphinQt.app" "$src/build/Binaries/dolphin-tool" "$o
 # The tests run beside other work: a background app never takes the focus
 plutil -replace LSBackgroundOnly -bool true "$out/DolphinQt.app/Contents/Info.plist"
 codesign --force --deep -s - "$out/DolphinQt.app" 2> /dev/null
-echo "$tag" > "$out/version"
-echo "ok: $out (Dolphin $tag)"
+echo "$tag-mac$revision" > "$out/version"
+echo "ok: $out (Dolphin $tag-mac$revision)"
