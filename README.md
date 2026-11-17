@@ -5,8 +5,9 @@ publishes it for Windows only, so this builds it for the Mac. `build-macos.sh` c
 builds it with the patches in `patches/`; there is one:
 
 - `sd-card.patch`: an SD card for the memory card slots and SP1 (`SlotB = 14` in Dolphin.ini), as an SD Gecko or an
-  SD2SP2 has it: SDHC in SPI mode, read and written, in `Load/GCSD.img` in the user folder. For testing a game's own SD
-  driver.
+  SD2SP2 has it: SDHC in SPI mode, read and written, in `Load/GCSD.img` in the user folder. It waits as a slow card
+  does: idle before a read block, busy after a written one that ends in the middle of a byte. `DOLPHIN_SD_SDSC=1` in
+  the environment makes it an SDSC card, addressed by byte. For testing a game's own SD driver.
 
 ```bash
 brew install cmake ninja pkg-config qt libusb

@@ -65,23 +65,46 @@ index db74306..9f48c8c 100644
    constexpr formatter() : EnumFormatter(names) {}
 diff --git a/Source/Core/Core/HW/EXI/EXI_DeviceSD.cpp b/Source/Core/Core/HW/EXI/EXI_DeviceSD.cpp
 new file mode 100644
-index 0000000..bc3a5da
+index 0000000..e08d9cd
 --- /dev/null
 +++ b/Source/Core/Core/HW/EXI/EXI_DeviceSD.cpp
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,214 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
 +#include "Core/HW/EXI/EXI_DeviceSD.h"
 +
 +#include <array>
++#include <cstdlib>
 +
 +#include "Common/FileUtil.h"
 +
 +namespace ExpansionInterface
 +{
++// A slow card, as a real one waits: bytes of idle before a read block's token, at a command's start and between the
++// blocks of a stream, and of busy after a written block, which ends in the middle of a byte
++constexpr int READ_WAIT = 2000;
++constexpr int BLOCK_WAIT = 600;
++constexpr int WRITE_BUSY = 4000;
++constexpr int STOP_BUSY = 40;
++
 +CEXISD::CEXISD(Core::System& system)
-+    : IEXIDevice(system), m_image(File::GetUserPath(D_LOAD_IDX) + "GCSD.img", "r+b")
++    : IEXIDevice(system), m_image(File::GetUserPath(D_LOAD_IDX) + "GCSD.img", "r+b"),
++      m_sdsc(std::getenv("DOLPHIN_SD_SDSC") != nullptr)
 +{
++}
++
++// A command's R1 comes a byte or two after it, as Ncr allows up to 8
++void CEXISD::Respond(u8 r1)
++{
++  m_out.push_back(0xFF);
++  m_out.push_back(r1);
++}
++
++// Busy for that many bytes, the last one let go of in its middle
++void CEXISD::Busy(int bytes)
++{
++  m_out.insert(m_out.end(), bytes, 0x00);
++  m_out.push_back(0x03);
 +}
 +
 +void CEXISD::SetCS(int cs)
@@ -109,7 +132,8 @@ index 0000000..bc3a5da
 +  m_image.ReadBytes(block.data(), block.size());
 +  m_image.ClearError();
 +  ++m_next;
-+  m_out.push_back(0xFF);
++  m_out.insert(m_out.end(), m_first_block ? READ_WAIT : BLOCK_WAIT, 0xFF);
++  m_first_block = false;
 +  m_out.push_back(0xFE);
 +  m_out.insert(m_out.end(), block.begin(), block.end());
 +  const u16 crc = CRC16(block.data(), block.size());
@@ -124,18 +148,22 @@ index 0000000..bc3a5da
 +  const bool app = m_app;
 +  m_app = false;
 +  const u8 idle = m_ready ? 0 : 1;
++  // A sector's address on an SDSC card is in bytes
++  const u32 sector = m_sdsc ? argument / 512 : argument;
 +  m_out.push_back(0xFF);
 +  if (command == 12)
 +  {
++    // A stuff byte, R1, then busy
 +    m_streaming = false;
 +    m_out.clear();
-+    m_out.insert(m_out.end(), {0xFF, 0x00, 0x00, 0x00});
++    m_out.insert(m_out.end(), {0xFF, 0xFF, 0x00});
++    Busy(STOP_BUSY);
 +    return;
 +  }
 +  if (app && command == 41)
 +  {
 +    m_ready = ++m_starts >= 3;
-+    m_out.push_back(m_ready ? 0 : 1);
++    Respond(m_ready ? 0 : 1);
 +    return;
 +  }
 +  switch (command)
@@ -144,7 +172,7 @@ index 0000000..bc3a5da
 +    m_ready = false;
 +    m_starts = 0;
 +    m_streaming = false;
-+    m_out.push_back(0x01);
++    Respond(0x01);
 +    break;
 +  case 8:
 +    m_out.insert(m_out.end(), {idle, 0x00, 0x00, static_cast<u8>(argument >> 8 & 0xF),
@@ -155,11 +183,12 @@ index 0000000..bc3a5da
 +    m_out.push_back(idle);
 +    break;
 +  case 58:
-+    m_out.insert(m_out.end(), {idle, static_cast<u8>(m_ready ? 0xC0 : 0x00), 0xFF, 0x80, 0x00});
++    m_out.insert(m_out.end(),
++                 {idle, static_cast<u8>(m_ready ? (m_sdsc ? 0x80 : 0xC0) : 0x00), 0xFF, 0x80, 0x00});
 +    break;
 +  case 16:
 +  case 59:
-+    m_out.push_back(idle);
++    Respond(idle);
 +    break;
 +  case 17:
 +  case 18:
@@ -168,8 +197,9 @@ index 0000000..bc3a5da
 +      m_out.push_back(0x04);
 +      break;
 +    }
-+    m_out.push_back(0x00);
-+    m_next = argument;
++    Respond(0x00);
++    m_next = sector;
++    m_first_block = true;
 +    QueueBlock();
 +    m_streaming = command == 18;
 +    break;
@@ -180,8 +210,8 @@ index 0000000..bc3a5da
 +      m_out.push_back(0x04);
 +      break;
 +    }
-+    m_out.push_back(0x00);
-+    m_next = argument;
++    Respond(0x00);
++    m_next = sector;
 +    m_writing = command;
 +    m_block.clear();
 +    break;
@@ -199,7 +229,8 @@ index 0000000..bc3a5da
 +    if (in == 0xFD && m_writing == 25)
 +    {
 +      m_writing = 0;
-+      m_out.push_back(0x00);
++      m_out.push_back(0xFF);
++      Busy(STOP_BUSY);
 +    }
 +    else if (in == (m_writing == 25 ? 0xFC : 0xFE))
 +    {
@@ -216,7 +247,9 @@ index 0000000..bc3a5da
 +  m_image.ClearError();
 +  ++m_next;
 +  m_block.clear();
-+  m_out.insert(m_out.end(), {0x05, 0x00});
++  // Idle before the data response, as a slow card has it, then its busy
++  m_out.insert(m_out.end(), {0xFF, 0xFF, 0xE5});
++  Busy(WRITE_BUSY);
 +  if (m_writing == 24)
 +    m_writing = 0;
 +}
@@ -252,10 +285,10 @@ index 0000000..bc3a5da
 +}  // namespace ExpansionInterface
 diff --git a/Source/Core/Core/HW/EXI/EXI_DeviceSD.h b/Source/Core/Core/HW/EXI/EXI_DeviceSD.h
 new file mode 100644
-index 0000000..66e7772
+index 0000000..e6d37cb
 --- /dev/null
 +++ b/Source/Core/Core/HW/EXI/EXI_DeviceSD.h
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,44 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
 +#pragma once
@@ -269,7 +302,8 @@ index 0000000..66e7772
 +
 +namespace ExpansionInterface
 +{
-+// An SDHC card in SPI mode, as on an SD Gecko or SD2SP2, read and written, backed by Load/GCSD.img in the user folder
++// An SDHC card in SPI mode, as on an SD Gecko or SD2SP2, read and written, backed by Load/GCSD.img in the user folder,
++// with the waits and busy of a slow one; DOLPHIN_SD_SDSC makes it an SDSC card
 +class CEXISD final : public IEXIDevice
 +{
 +public:
@@ -282,6 +316,8 @@ index 0000000..66e7772
 +  void Execute();
 +  void QueueBlock();
 +  void ReceiveByte(u8 in);
++  void Respond(u8 r1);
++  void Busy(int bytes);
 +
 +  File::IOFile m_image;
 +  std::vector<u8> m_command;
@@ -292,6 +328,8 @@ index 0000000..66e7772
 +  int m_starts = 0;
 +  u32 m_next = 0;
 +  int m_writing = 0;                    // CMD24 or CMD25 until its block or its stop token
++  bool m_sdsc;                          // DOLPHIN_SD_SDSC set: addressed by byte, as cards up to 2 GB
++  bool m_first_block = false;           // the next queued block is a command's first
 +  std::vector<u8> m_block;              // the token and what came after it
 +};
 +}  // namespace ExpansionInterface

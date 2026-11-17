@@ -10,7 +10,7 @@ if [ $# -ne 2 ]; then
   exit 1
 fi
 tag="$1"
-revision=3       # of these patches and this script: the n of a release tag <tag>-mac<n>
+revision=4       # of these patches and this script: the n of a release tag <tag>-mac<n>
 here="$(cd "$(dirname "$0")" && pwd)"
 out="$(mkdir -p "$2" && cd "$2" && pwd)"
 src="$out/src"
