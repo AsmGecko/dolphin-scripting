@@ -65,10 +65,10 @@ index db74306..9f48c8c 100644
    constexpr formatter() : EnumFormatter(names) {}
 diff --git a/Source/Core/Core/HW/EXI/EXI_DeviceSD.cpp b/Source/Core/Core/HW/EXI/EXI_DeviceSD.cpp
 new file mode 100644
-index 0000000..928c74b
+index 0000000..bc3a5da
 --- /dev/null
 +++ b/Source/Core/Core/HW/EXI/EXI_DeviceSD.cpp
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,181 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
 +#include "Core/HW/EXI/EXI_DeviceSD.h"
@@ -80,7 +80,7 @@ index 0000000..928c74b
 +namespace ExpansionInterface
 +{
 +CEXISD::CEXISD(Core::System& system)
-+    : IEXIDevice(system), m_image(File::GetUserPath(D_LOAD_IDX) + "GCSD.img", "rb")
++    : IEXIDevice(system), m_image(File::GetUserPath(D_LOAD_IDX) + "GCSD.img", "r+b")
 +{
 +}
 +
@@ -173,10 +173,52 @@ index 0000000..928c74b
 +    QueueBlock();
 +    m_streaming = command == 18;
 +    break;
++  case 24:
++  case 25:
++    if (!m_ready)
++    {
++      m_out.push_back(0x04);
++      break;
++    }
++    m_out.push_back(0x00);
++    m_next = argument;
++    m_writing = command;
++    m_block.clear();
++    break;
 +  default:
 +    m_out.push_back(idle | 0x04);
 +    break;
 +  }
++}
++
++// A written block after its token: its 512 bytes and CRC, then the data response and a byte of busy
++void CEXISD::ReceiveByte(u8 in)
++{
++  if (m_block.empty())
++  {
++    if (in == 0xFD && m_writing == 25)
++    {
++      m_writing = 0;
++      m_out.push_back(0x00);
++    }
++    else if (in == (m_writing == 25 ? 0xFC : 0xFE))
++    {
++      m_block.push_back(in);
++    }
++    return;
++  }
++  m_block.push_back(in);
++  if (m_block.size() < 1 + 512 + 2)
++    return;
++  m_image.Seek(u64{m_next} * 512, File::SeekOrigin::Begin);
++  m_image.WriteBytes(m_block.data() + 1, 512);
++  m_image.Flush();
++  m_image.ClearError();
++  ++m_next;
++  m_block.clear();
++  m_out.insert(m_out.end(), {0x05, 0x00});
++  if (m_writing == 24)
++    m_writing = 0;
 +}
 +
 +void CEXISD::TransferByte(u8& byte)
@@ -193,6 +235,11 @@ index 0000000..928c74b
 +    byte = m_out.front();
 +    m_out.pop_front();
 +  }
++  if (m_writing && m_command.empty() && (m_block.size() || (in != 0xFF && (in & 0xC0) != 0x40)))
++  {
++    ReceiveByte(in);
++    return;
++  }
 +  if (m_command.empty() && (in & 0xC0) != 0x40)
 +    return;
 +  m_command.push_back(in);
@@ -205,10 +252,10 @@ index 0000000..928c74b
 +}  // namespace ExpansionInterface
 diff --git a/Source/Core/Core/HW/EXI/EXI_DeviceSD.h b/Source/Core/Core/HW/EXI/EXI_DeviceSD.h
 new file mode 100644
-index 0000000..642be6d
+index 0000000..66e7772
 --- /dev/null
 +++ b/Source/Core/Core/HW/EXI/EXI_DeviceSD.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,39 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
 +#pragma once
@@ -222,7 +269,7 @@ index 0000000..642be6d
 +
 +namespace ExpansionInterface
 +{
-+// An SDHC card in SPI mode, as on an SD Gecko or SD2SP2, read-only, backed by Load/GCSD.img in the user folder
++// An SDHC card in SPI mode, as on an SD Gecko or SD2SP2, read and written, backed by Load/GCSD.img in the user folder
 +class CEXISD final : public IEXIDevice
 +{
 +public:
@@ -234,6 +281,7 @@ index 0000000..642be6d
 +  void TransferByte(u8& byte) override;
 +  void Execute();
 +  void QueueBlock();
++  void ReceiveByte(u8 in);
 +
 +  File::IOFile m_image;
 +  std::vector<u8> m_command;
@@ -243,5 +291,7 @@ index 0000000..642be6d
 +  bool m_streaming = false;
 +  int m_starts = 0;
 +  u32 m_next = 0;
++  int m_writing = 0;                    // CMD24 or CMD25 until its block or its stop token
++  std::vector<u8> m_block;              // the token and what came after it
 +};
 +}  // namespace ExpansionInterface

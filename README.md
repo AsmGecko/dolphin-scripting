@@ -5,7 +5,7 @@ publishes it for Windows only, so this builds it for the Mac. `build-macos.sh` c
 builds it with the patches in `patches/`; there is one:
 
 - `sd-card.patch`: an SD card for the memory card slots and SP1 (`SlotB = 14` in Dolphin.ini), as an SD Gecko or an
-  SD2SP2 has it: SDHC in SPI mode, read-only, from `Load/GCSD.img` in the user folder. For testing a game's own SD
+  SD2SP2 has it: SDHC in SPI mode, read and written, in `Load/GCSD.img` in the user folder. For testing a game's own SD
   driver.
 
 ```bash
