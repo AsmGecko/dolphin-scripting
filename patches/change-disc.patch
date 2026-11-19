@@ -1,0 +1,53 @@
+diff --git a/Source/Core/Scripting/Python/Modules/emulationmodule.cpp b/Source/Core/Scripting/Python/Modules/emulationmodule.cpp
+index 28cdb03..6460c24 100644
+--- a/Source/Core/Scripting/Python/Modules/emulationmodule.cpp
++++ b/Source/Core/Scripting/Python/Modules/emulationmodule.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "Scripting/Python/Modules/emulationmodule.h"
+ 
++#include "Core/Core.h"
++#include "Core/HW/DVD/DVDInterface.h"
+ #include "Core/HW/ProcessorInterface.h"
+ #include "Core/Movie.h"
+ #include "Core/System.h"
+@@ -48,6 +50,18 @@ static PyObject* EmulationReset(PyObject* self)
+   Py_RETURN_NONE;
+ }
+ 
++// Ejects the disc and inserts this one a second later, as File > Change Disc does
++static PyObject* EmulationChangeDisc(PyObject* self, PyObject* args)
++{
++  const char* path;
++  if (!PyArg_ParseTuple(args, "s", &path))
++    return nullptr;
++  EmulationModuleState* state = Py::GetState<EmulationModuleState>(self);
++  const Core::CPUThreadGuard guard(*state->system);
++  state->system->GetDVDInterface().ChangeDisc(guard, path);
++  Py_RETURN_NONE;
++}
++
+ static void SetupEmulationModule(PyObject* module, EmulationModuleState* state)
+ {
+   Core::System* system = PyScripting::PyScriptingBackend::GetCurrent()->GetSystem();
+@@ -60,6 +74,7 @@ PyMODINIT_FUNC PyInit_emulation()
+       Py::MakeMethodDef<EmulationResume>("resume"),
+       Py::MakeMethodDef<EmulationPause>("pause"),
+       Py::MakeMethodDef<EmulationReset>("reset"),
++      Py::MakeMethodDef<EmulationChangeDisc>("change_disc"),
+ 
+       {nullptr, nullptr, 0, nullptr}  // Sentinel
+   };
+diff --git a/python-stubs/dolphin/emulation.pyi b/python-stubs/dolphin/emulation.pyi
+index 209f6dd..6755ea6 100644
+--- a/python-stubs/dolphin/emulation.pyi
++++ b/python-stubs/dolphin/emulation.pyi
+@@ -17,3 +17,8 @@ def reset() -> None:
+     """
+     Resets the emulation. Acts like tapping the "Reset"-Button.
+     """
++
++def change_disc(path: str) -> None:
++    """
++    Ejects the disc and inserts the one at path a second later. Acts like File > Change Disc.
++    """
