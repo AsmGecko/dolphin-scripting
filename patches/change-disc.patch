@@ -1,5 +1,5 @@
 diff --git a/Source/Core/Scripting/Python/Modules/emulationmodule.cpp b/Source/Core/Scripting/Python/Modules/emulationmodule.cpp
-index 28cdb03..6460c24 100644
+index 28cdb03..33c9623 100644
 --- a/Source/Core/Scripting/Python/Modules/emulationmodule.cpp
 +++ b/Source/Core/Scripting/Python/Modules/emulationmodule.cpp
 @@ -4,6 +4,8 @@
@@ -11,26 +11,22 @@ index 28cdb03..6460c24 100644
  #include "Core/HW/ProcessorInterface.h"
  #include "Core/Movie.h"
  #include "Core/System.h"
-@@ -48,6 +50,18 @@ static PyObject* EmulationReset(PyObject* self)
+@@ -48,6 +50,14 @@ static PyObject* EmulationReset(PyObject* self)
    Py_RETURN_NONE;
  }
  
 +// Ejects the disc and inserts this one a second later, as File > Change Disc does
-+static PyObject* EmulationChangeDisc(PyObject* self, PyObject* args)
++static void EmulationChangeDisc(PyObject* self, const char* path)
 +{
-+  const char* path;
-+  if (!PyArg_ParseTuple(args, "s", &path))
-+    return nullptr;
 +  EmulationModuleState* state = Py::GetState<EmulationModuleState>(self);
 +  const Core::CPUThreadGuard guard(*state->system);
 +  state->system->GetDVDInterface().ChangeDisc(guard, path);
-+  Py_RETURN_NONE;
 +}
 +
  static void SetupEmulationModule(PyObject* module, EmulationModuleState* state)
  {
    Core::System* system = PyScripting::PyScriptingBackend::GetCurrent()->GetSystem();
-@@ -60,6 +74,7 @@ PyMODINIT_FUNC PyInit_emulation()
+@@ -60,6 +70,7 @@ PyMODINIT_FUNC PyInit_emulation()
        Py::MakeMethodDef<EmulationResume>("resume"),
        Py::MakeMethodDef<EmulationPause>("pause"),
        Py::MakeMethodDef<EmulationReset>("reset"),
