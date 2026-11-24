@@ -10,6 +10,9 @@ builds it with the patches in `patches/`:
   the environment makes it an SDSC card, addressed by byte. For testing a game's own SD driver.
 - `change-disc.patch`: `dolphin.emulation.change_disc(path)` in the scripts, which does what File > Change Disc
   does: the disc out, and the one at path in a second later. For testing a loader that waits for the disc.
+- `mmu-page-cross.patch`: a read across two pages is translated like a write already is, with the MMU on, and stops at
+  the first page fault. Felk's tag read the bytes untranslated, so Super Mario Strikers' virtual memory crashed in a
+  match.
 
 ```bash
 brew install cmake ninja pkg-config qt libusb

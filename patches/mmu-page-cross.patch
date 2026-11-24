@@ -1,0 +1,15 @@
+diff --git a/Source/Core/Core/PowerPC/MMU.cpp b/Source/Core/Core/PowerPC/MMU.cpp
+index 07b59fc..8447260 100644
+--- a/Source/Core/Core/PowerPC/MMU.cpp
++++ b/Source/Core/Core/PowerPC/MMU.cpp
+@@ -172,7 +172,9 @@ T MMU::ReadFromHardware(u32 em_address)
+     u64 var = 0;
+     for (u32 i = 0; i < sizeof(T); ++i)
+     {
+-      var = (var << 8) | ReadFromHardware<flag, u8, TranslateCondition::Never>(em_address + i);
++      var = (var << 8) | ReadFromHardware<flag, u8, translate_if>(em_address + i);
++      if (m_ppc_state.Exceptions & EXCEPTION_DSI)
++        return 0;
+     }
+     return static_cast<T>(var);
+   }
