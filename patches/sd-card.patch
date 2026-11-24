@@ -333,3 +333,23 @@ index 0000000..e6d37cb
 +  std::vector<u8> m_block;              // the token and what came after it
 +};
 +}  // namespace ExpansionInterface
+diff --git a/Source/Core/DolphinLib.props b/Source/Core/DolphinLib.props
+index ecefecb..679296d 100644
+--- a/Source/Core/DolphinLib.props
++++ b/Source/Core/DolphinLib.props
+@@ -292,6 +292,7 @@
+     <ClInclude Include="Core\HW\EXI\EXI_DeviceMemoryCard.h" />
+     <ClInclude Include="Core\HW\EXI\EXI_DeviceMic.h" />
+     <ClInclude Include="Core\HW\EXI\EXI_DeviceModem.h" />
++    <ClInclude Include="Core\HW\EXI\EXI_DeviceSD.h" />
+     <ClInclude Include="Core\HW\EXI\EXI.h" />
+     <ClInclude Include="Core\HW\GBACore.h" />
+     <ClInclude Include="Core\HW\GBAPad.h" />
+@@ -965,6 +966,7 @@
+     <ClCompile Include="Core\HW\EXI\EXI_DeviceMemoryCard.cpp" />
+     <ClCompile Include="Core\HW\EXI\EXI_DeviceMic.cpp" />
+     <ClCompile Include="Core\HW\EXI\EXI_DeviceModem.cpp" />
++    <ClCompile Include="Core\HW\EXI\EXI_DeviceSD.cpp" />
+     <ClCompile Include="Core\HW\EXI\EXI.cpp" />
+     <ClCompile Include="Core\HW\GBACore.cpp" />
+     <ClCompile Include="Core\HW\GBAPad.cpp" />
